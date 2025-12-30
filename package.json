@@ -22,8 +22,6 @@
     "swagger:export": "curl http://localhost:3000/api-json > swagger.json"
   },
   "dependencies": {
-    "@clerk/clerk-sdk-node": "^4.13.23",
-    "@clerk/express": "^1.7.60",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
@@ -36,7 +34,6 @@
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "svix": "^1.84.1",
     "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.28"
   },

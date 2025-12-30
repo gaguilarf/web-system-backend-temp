@@ -12,13 +12,6 @@ export class User {
     user_id: number;
 
     @ApiProperty({
-        description: 'ID del usuario en Clerk',
-        example: 'user_2abc123def',
-    })
-    @Column({ type: 'varchar', length: 255, unique: true, nullable: true })
-    clerk_user_id: string;
-
-    @ApiProperty({
         description: 'ID del rol asignado',
         example: 1,
     })
@@ -39,7 +32,7 @@ export class User {
     @Column({ type: 'varchar', length: 255, unique: true })
     user_email: string;
 
-    @Column({ type: 'varchar', length: 255, select: false, nullable: true }) // Nullable porque Clerk maneja passwords
+    @Column({ type: 'varchar', length: 255, select: false }) // No se incluye por defecto en las consultas
     user_password_hash: string;
 
     @ApiProperty({

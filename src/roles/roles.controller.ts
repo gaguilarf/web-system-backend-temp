@@ -1,10 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { Role } from './entities/role.entity';
-import { ClerkAuthGuard } from '../clerk/clerk.guard';
 
 @ApiTags('roles')
 @Controller('roles')
@@ -12,7 +11,6 @@ export class RolesController {
     constructor(private readonly rolesService: RolesService) { }
 
     @Post()
-    @UseGuards(ClerkAuthGuard)
     @ApiOperation({ summary: 'Crear nuevo rol' })
     @ApiResponse({ status: 201, description: 'Rol creado exitosamente', type: Role })
     @ApiResponse({ status: 409, description: 'El rol ya existe' })
@@ -37,7 +35,6 @@ export class RolesController {
     }
 
     @Patch(':id')
-    @UseGuards(ClerkAuthGuard)
     @ApiOperation({ summary: 'Actualizar rol' })
     @ApiResponse({ status: 200, description: 'Rol actualizado', type: Role })
     @ApiResponse({ status: 404, description: 'Rol no encontrado' })
@@ -50,7 +47,6 @@ export class RolesController {
     }
 
     @Delete(':id')
-    @UseGuards(ClerkAuthGuard)
     @ApiOperation({ summary: 'Desactivar rol' })
     @ApiResponse({ status: 200, description: 'Rol desactivado', type: Role })
     @ApiResponse({ status: 404, description: 'Rol no encontrado' })

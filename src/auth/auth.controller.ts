@@ -1,40 +1,29 @@
-import { Controller, Post, Get, Headers, UseGuards, Req } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Post, Body } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { ClerkAuthGuard } from '../clerk/clerk.guard';
-import { CurrentUser } from '../clerk/clerk.decorator';
-import type { Request } from 'express';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+import { LoginResponseDto } from './dto/login-response.dto';
+import { RegisterResponseDto } from './dto/register-response.dto';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
     constructor(private readonly authService: AuthService) { }
 
-    @Post('webhook')
-    @ApiOperation({ summary: 'Webhook de Clerk para sincronizar usuarios' })
-    @ApiResponse({ status: 200, description: 'Webhook procesado exitosamente' })
-    @ApiResponse({ status: 400, description: 'Firma de webhook inválida' })
-    async handleWebhook(
-        @Req() req: Request,
-        @Headers() headers: any,
-    ) {
-        // Obtener el raw body para verificar la firma
-        const payload = req.body?.toString() || '';
-
-        return this.authService.handleWebhook(payload, {
-            'svix-id': headers['svix-id'],
-            'svix-timestamp': headers['svix-timestamp'],
-            'svix-signature': headers['svix-signature'],
-        });
+    @Post('register')
+    @ApiOperation({ summary: 'Registrar nuevo usuario' })
+    @ApiResponse({ status: 201, description: 'Usuario registrado exitosamente', type: RegisterResponseDto })
+    @ApiResponse({ status: 409, description: 'El email ya está registrado' })
+    async register(@Body() registerDto: RegisterDto): Promise<RegisterResponseDto> {
+        return this.authService.register(registerDto);
     }
 
-    @Get('me')
-    @UseGuards(ClerkAuthGuard)
-    @ApiBearerAuth('JWT-auth')
-    @ApiOperation({ summary: 'Obtener información del usuario actual' })
-    @ApiResponse({ status: 200, description: 'Usuario encontrado' })
-    @ApiResponse({ status: 401, description: 'No autenticado' })
-    async getCurrentUser(@CurrentUser() user: any) {
-        return this.authService.getCurrentUser(user.userId);
+    @Post('login')
+    @ApiOperation({ summary: 'Iniciar sesión' })
+    @ApiResponse({ status: 200, description: 'Login exitoso', type: LoginResponseDto })
+    @ApiResponse({ status: 401, description: 'Credenciales inválidas' })
+    async login(@Body() loginDto: LoginDto): Promise<LoginResponseDto> {
+        return this.authService.login(loginDto);
     }
 }

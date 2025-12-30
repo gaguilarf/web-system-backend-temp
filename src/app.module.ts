@@ -5,7 +5,6 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { RolesModule } from './roles/roles.module';
-import { ClerkModule } from './clerk/clerk.module';
 
 @Module({
   imports: [
@@ -28,7 +27,6 @@ import { ClerkModule } from './clerk/clerk.module';
       }),
       inject: [ConfigService],
     }),
-    ClerkModule,
     AuthModule,
     RolesModule,
   ],
@@ -36,5 +34,3 @@ import { ClerkModule } from './clerk/clerk.module';
   providers: [AppService],
 })
 export class AppModule { }
-
-

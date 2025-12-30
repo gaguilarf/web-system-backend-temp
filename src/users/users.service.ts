@@ -19,6 +19,7 @@ export class UsersService {
     async findByEmail(email: string): Promise<User | null> {
         return this.usersRepository.findOne({
             where: { user_email: email },
+            select: ['user_id', 'user_email', 'user_name', 'user_password_hash', 'user_role', 'user_dni', 'user_last_login', 'user_created_date', 'user_modified_date', 'user_is_active'],
             relations: ['role'],
         });
     }
@@ -34,24 +35,18 @@ export class UsersService {
     }
 
     /**
-     * Buscar usuario por Clerk ID
+     * Crear nuevo usuario con password hasheado
      */
-    async findByClerkId(clerkId: string): Promise<User | null> {
-        return this.usersRepository.findOne({
-            where: { clerk_user_id: clerkId },
-            relations: ['role'],
-        });
-    }
-
-    /**
-     * Crear usuario desde datos de Clerk
-     */
-    async createFromClerk(clerkUser: any): Promise<User> {
-        // Verificar si el usuario ya existe
-        const existingUser = await this.findByClerkId(clerkUser.id);
+    async create(email: string, password: string, name: string, dni?: string): Promise<User> {
+        // Verificar si el email ya existe
+        const existingUser = await this.findByEmail(email);
         if (existingUser) {
-            throw new ConflictException('El usuario ya existe');
+            throw new ConflictException('El email ya está registrado');
         }
+
+        // Hashear password
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
 
         // Obtener rol por defecto (user)
         const defaultRole = await this.rolesService.findByName('user');
@@ -59,44 +54,20 @@ export class UsersService {
             throw new NotFoundException('Rol por defecto no encontrado');
         }
 
-        // Extraer email primario
-        const primaryEmail = clerkUser.email_addresses?.find((e: any) => e.id === clerkUser.primary_email_address_id);
-        const email = primaryEmail?.email_address || clerkUser.email_addresses?.[0]?.email_address;
-
         // Crear usuario
         const user = this.usersRepository.create({
-            clerk_user_id: clerkUser.id,
             user_email: email,
-            user_name: `${clerkUser.first_name || ''} ${clerkUser.last_name || ''}`.trim() || email,
+            user_password_hash: hashedPassword,
+            user_name: name,
+            user_dni: dni,
             user_role: defaultRole.rol_id,
-            user_is_active: true,
         });
 
         return this.usersRepository.save(user);
     }
 
     /**
-     * Actualizar usuario desde datos de Clerk
-     */
-    async updateFromClerk(clerkUser: any): Promise<User> {
-        const user = await this.findByClerkId(clerkUser.id);
-        if (!user) {
-            throw new NotFoundException('Usuario no encontrado');
-        }
-
-        // Extraer email primario
-        const primaryEmail = clerkUser.email_addresses?.find((e: any) => e.id === clerkUser.primary_email_address_id);
-        const email = primaryEmail?.email_address || clerkUser.email_addresses?.[0]?.email_address;
-
-        // Actualizar datos
-        user.user_email = email;
-        user.user_name = `${clerkUser.first_name || ''} ${clerkUser.last_name || ''}`.trim() || email;
-
-        return this.usersRepository.save(user);
-    }
-
-    /**
-     * Validar password (mantenido para compatibilidad, pero no se usa con Clerk)
+     * Validar password
      */
     async validatePassword(plainPassword: string, hashedPassword: string): Promise<boolean> {
         return bcrypt.compare(plainPassword, hashedPassword);
@@ -110,17 +81,4 @@ export class UsersService {
             user_last_login: new Date(),
         });
     }
-
-    /**
-     * Desactivar usuario
-     */
-    async deactivate(clerkUserId: string): Promise<void> {
-        const user = await this.findByClerkId(clerkUserId);
-        if (user) {
-            await this.usersRepository.update(user.user_id, {
-                user_is_active: false,
-            });
-        }
-    }
 }
-

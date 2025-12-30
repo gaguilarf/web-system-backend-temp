@@ -1,114 +1,85 @@
-import { Injectable, Inject, BadRequestException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Webhook } from 'svix';
+// auth/auth.service.ts
+import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+import { LoginResponseDto } from './dto/login-response.dto';
+import { RegisterResponseDto } from './dto/register-response.dto';
 import { UsersService } from '../users/users.service';
-import { CLERK_CLIENT } from '../clerk/clerk.module';
 
 @Injectable()
 export class AuthService {
     constructor(
         private usersService: UsersService,
-        private configService: ConfigService,
-        @Inject(CLERK_CLIENT) private clerkClient: any,
     ) { }
 
     /**
-     * Verificar y procesar webhook de Clerk
+     * Registrar nuevo usuario
      */
-    async handleWebhook(payload: string, headers: any): Promise<any> {
-        const webhookSecret = this.configService.get<string>('CLERK_WEBHOOK_SECRET');
-
-        if (!webhookSecret) {
-            throw new BadRequestException('Webhook secret not configured');
-        }
-
-        // Verificar firma del webhook
-        const wh = new Webhook(webhookSecret);
-        let evt: any;
-
+    async register(registerDto: RegisterDto): Promise<RegisterResponseDto> {
         try {
-            evt = wh.verify(payload, headers);
-        } catch (err) {
-            throw new BadRequestException('Invalid webhook signature');
-        }
+            // Crear usuario (el servicio ya verifica duplicados y hashea el password)
+            const user = await this.usersService.create(
+                registerDto.email,
+                registerDto.password,
+                registerDto.name,
+                registerDto.dni,
+            );
 
-        // Procesar evento según tipo
-        const eventType = evt.type;
-        const clerkUser = evt.data;
-
-        switch (eventType) {
-            case 'user.created':
-                return await this.handleUserCreated(clerkUser);
-            case 'user.updated':
-                return await this.handleUserUpdated(clerkUser);
-            case 'user.deleted':
-                return await this.handleUserDeleted(clerkUser.id);
-            default:
-                console.log(`Unhandled webhook event type: ${eventType}`);
-                return { received: true };
-        }
-    }
-
-    /**
-     * Manejar creación de usuario desde Clerk
-     */
-    private async handleUserCreated(clerkUser: any) {
-        try {
-            const user = await this.usersService.createFromClerk(clerkUser);
-            return { success: true, user };
+            return {
+                access_token: 'temp_token', // TODO: Implementar con AuthJS
+                token_type: 'Bearer',
+                expires_in: 3600,
+                user_id: user.user_id.toString(),
+            };
         } catch (error) {
-            console.error('Error creating user from Clerk:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Manejar actualización de usuario desde Clerk
-     */
-    private async handleUserUpdated(clerkUser: any) {
-        try {
-            const user = await this.usersService.updateFromClerk(clerkUser);
-            return { success: true, user };
-        } catch (error) {
-            console.error('Error updating user from Clerk:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Manejar eliminación de usuario desde Clerk
-     */
-    private async handleUserDeleted(clerkUserId: string) {
-        try {
-            await this.usersService.deactivate(clerkUserId);
-            return { success: true };
-        } catch (error) {
-            console.error('Error deactivating user:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Obtener información del usuario actual desde Clerk
-     */
-    async getCurrentUser(userId: string) {
-        try {
-            // Buscar en nuestra DB
-            const user = await this.usersService.findByClerkId(userId);
-
-            if (!user) {
-                // Si no existe, sincronizar desde Clerk
-                const clerkUser = await this.clerkClient.users.getUser(userId);
-                return await this.usersService.createFromClerk(clerkUser);
+            if (error instanceof ConflictException) {
+                throw error;
             }
-
-            // Actualizar último login
-            await this.usersService.updateLastLogin(user.user_id);
-
-            return user;
-        } catch (error) {
-            console.error('Error getting current user:', error);
-            throw error;
+            throw new Error('Error al registrar usuario');
         }
+    }
+
+    /**
+     * Login de usuario
+     */
+    async login(loginDto: LoginDto): Promise<LoginResponseDto> {
+        // Validar usuario y contraseña
+        const user = await this.validateUser(loginDto.email, loginDto.password);
+
+        if (!user) {
+            throw new UnauthorizedException('Credenciales inválidas');
+        }
+
+        // Actualizar último login
+        await this.usersService.updateLastLogin(user.user_id);
+
+        return {
+            access_token: 'temp_token', // TODO: Implementar con AuthJS
+            token_type: 'Bearer',
+            expires_in: 3600,
+            user_id: user.user_id.toString(),
+        };
+    }
+
+    /**
+     * Validar credenciales de usuario
+     */
+    private async validateUser(email: string, password: string): Promise<any | null> {
+        const user = await this.usersService.findByEmail(email);
+
+        if (!user) {
+            return null;
+        }
+
+        // Validar password
+        const isPasswordValid = await this.usersService.validatePassword(password, user.user_password_hash);
+
+        if (!isPasswordValid) {
+            return null;
+        }
+
+        // Retornar usuario sin el password
+        const { user_password_hash: _, ...result } = user;
+        return result;
     }
 }

@@ -27,11 +27,10 @@ CREATE INDEX idx_roles_name ON roles(rol_name);
 -- =====================================================
 CREATE TABLE users (
     user_id SERIAL PRIMARY KEY,
-    clerk_user_id VARCHAR(255) UNIQUE,
     user_role INTEGER REFERENCES roles(rol_id) ON DELETE SET NULL,
     user_name VARCHAR(255) NOT NULL,
     user_email VARCHAR(255) UNIQUE NOT NULL,
-    user_password_hash VARCHAR(255),
+    user_password_hash VARCHAR(255) NOT NULL,
     user_dni VARCHAR(20),
     user_last_login TIMESTAMP,
     user_created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -41,7 +40,6 @@ CREATE TABLE users (
 
 -- Índices para optimizar búsquedas
 CREATE INDEX idx_users_email ON users(user_email);
-CREATE INDEX idx_users_clerk_id ON users(clerk_user_id);
 CREATE INDEX idx_users_role ON users(user_role);
 CREATE INDEX idx_users_active ON users(user_is_active);
 
