@@ -1,51 +1,86 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Role } from '../../roles/entities/role.entity';
 
 @Entity('users')
 export class User {
     @ApiProperty({
         description: 'ID del usuario',
-        example: '123e4567-e89b-12d3-a456-426614174000',
+        example: 1,
     })
-    @PrimaryGeneratedColumn('uuid')
-    id: string;
+    @PrimaryGeneratedColumn()
+    user_id: number;
 
     @ApiProperty({
-        description: 'Email del usuario',
-        example: 'usuario@ejemplo.com',
+        description: 'ID del usuario en Clerk',
+        example: 'user_2abc123def',
     })
-    @Column({ unique: true })
-    email: string;
+    @Column({ type: 'varchar', length: 255, unique: true, nullable: true })
+    clerk_user_id: string;
 
-    @Column({ select: false }) // No se incluye por defecto en las consultas
-    password: string;
+    @ApiProperty({
+        description: 'ID del rol asignado',
+        example: 1,
+    })
+    @Column({ name: 'user_role', nullable: true })
+    user_role: number;
 
     @ApiProperty({
         description: 'Nombre del usuario',
         example: 'Juan Pérez',
     })
-    @Column()
-    name: string;
+    @Column({ type: 'varchar', length: 255 })
+    user_name: string;
 
     @ApiProperty({
-        description: 'Roles del usuario',
-        example: ['user', 'admin'],
-        isArray: true,
+        description: 'Email del usuario',
+        example: 'usuario@ejemplo.com',
     })
-    @Column('simple-array', { default: 'user' })
-    roles: string[];
+    @Column({ type: 'varchar', length: 255, unique: true })
+    user_email: string;
+
+    @Column({ type: 'varchar', length: 255, select: false, nullable: true }) // Nullable porque Clerk maneja passwords
+    user_password_hash: string;
 
     @ApiProperty({
-        description: 'Fecha de creación',
+        description: 'DNI del usuario',
+        example: '12345678',
+        required: false,
+    })
+    @Column({ type: 'varchar', length: 20, nullable: true })
+    user_dni: string;
+
+    @ApiProperty({
+        description: 'Fecha del último login',
+        example: '2024-01-01T00:00:00.000Z',
+        required: false,
+    })
+    @Column({ type: 'timestamp', nullable: true })
+    user_last_login: Date;
+
+    @ApiProperty({
+        description: 'Fecha de creación del usuario',
         example: '2024-01-01T00:00:00.000Z',
     })
-    @CreateDateColumn()
-    createdAt: Date;
+    @CreateDateColumn({ name: 'user_created_date' })
+    user_created_date: Date;
 
     @ApiProperty({
-        description: 'Fecha de última actualización',
+        description: 'Fecha de última modificación del usuario',
         example: '2024-01-01T00:00:00.000Z',
     })
-    @UpdateDateColumn()
-    updatedAt: Date;
+    @UpdateDateColumn({ name: 'user_modified_date' })
+    user_modified_date: Date;
+
+    @ApiProperty({
+        description: 'Estado del usuario (activo/inactivo)',
+        example: true,
+    })
+    @Column({ type: 'boolean', default: true })
+    user_is_active: boolean;
+
+    // Relación Many-to-One con Role
+    @ManyToOne(() => Role, (role) => role.users, { eager: true })
+    @JoinColumn({ name: 'user_role' })
+    role: Role;
 }

@@ -1,104 +1,114 @@
-// auth/auth.service.ts
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
-import { LoginResponseDto } from './dto/login-response.dto';
-import { RegisterResponseDto } from './dto/register-response.dto';
+import { Injectable, Inject, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Webhook } from 'svix';
 import { UsersService } from '../users/users.service';
+import { CLERK_CLIENT } from '../clerk/clerk.module';
 
 @Injectable()
 export class AuthService {
     constructor(
-        private jwtService: JwtService,
         private usersService: UsersService,
+        private configService: ConfigService,
+        @Inject(CLERK_CLIENT) private clerkClient: any,
     ) { }
 
     /**
-     * Registrar nuevo usuario
+     * Verificar y procesar webhook de Clerk
      */
-    async register(registerDto: RegisterDto): Promise<RegisterResponseDto> {
+    async handleWebhook(payload: string, headers: any): Promise<any> {
+        const webhookSecret = this.configService.get<string>('CLERK_WEBHOOK_SECRET');
+
+        if (!webhookSecret) {
+            throw new BadRequestException('Webhook secret not configured');
+        }
+
+        // Verificar firma del webhook
+        const wh = new Webhook(webhookSecret);
+        let evt: any;
+
         try {
-            // Crear usuario (el servicio ya verifica duplicados y hashea el password)
-            const user = await this.usersService.create(
-                registerDto.email,
-                registerDto.password,
-                registerDto.name,
-            );
+            evt = wh.verify(payload, headers);
+        } catch (err) {
+            throw new BadRequestException('Invalid webhook signature');
+        }
 
-            // Generar token JWT
-            const token = this.generateToken(user);
+        // Procesar evento según tipo
+        const eventType = evt.type;
+        const clerkUser = evt.data;
 
-            return {
-                access_token: token,
-                token_type: 'Bearer',
-                expires_in: 3600,
-                user_id: user.id,
-            };
+        switch (eventType) {
+            case 'user.created':
+                return await this.handleUserCreated(clerkUser);
+            case 'user.updated':
+                return await this.handleUserUpdated(clerkUser);
+            case 'user.deleted':
+                return await this.handleUserDeleted(clerkUser.id);
+            default:
+                console.log(`Unhandled webhook event type: ${eventType}`);
+                return { received: true };
+        }
+    }
+
+    /**
+     * Manejar creación de usuario desde Clerk
+     */
+    private async handleUserCreated(clerkUser: any) {
+        try {
+            const user = await this.usersService.createFromClerk(clerkUser);
+            return { success: true, user };
         } catch (error) {
-            if (error instanceof ConflictException) {
-                throw error;
+            console.error('Error creating user from Clerk:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Manejar actualización de usuario desde Clerk
+     */
+    private async handleUserUpdated(clerkUser: any) {
+        try {
+            const user = await this.usersService.updateFromClerk(clerkUser);
+            return { success: true, user };
+        } catch (error) {
+            console.error('Error updating user from Clerk:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Manejar eliminación de usuario desde Clerk
+     */
+    private async handleUserDeleted(clerkUserId: string) {
+        try {
+            await this.usersService.deactivate(clerkUserId);
+            return { success: true };
+        } catch (error) {
+            console.error('Error deactivating user:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Obtener información del usuario actual desde Clerk
+     */
+    async getCurrentUser(userId: string) {
+        try {
+            // Buscar en nuestra DB
+            const user = await this.usersService.findByClerkId(userId);
+
+            if (!user) {
+                // Si no existe, sincronizar desde Clerk
+                const clerkUser = await this.clerkClient.users.getUser(userId);
+                return await this.usersService.createFromClerk(clerkUser);
             }
-            throw new Error('Error al registrar usuario');
+
+            // Actualizar último login
+            await this.usersService.updateLastLogin(user.user_id);
+
+            return user;
+        } catch (error) {
+            console.error('Error getting current user:', error);
+            throw error;
         }
-    }
-
-    /**
-     * Login de usuario
-     */
-    async login(loginDto: LoginDto): Promise<LoginResponseDto> {
-        // Validar usuario y contraseña
-        const user = await this.validateUser(loginDto.email, loginDto.password);
-
-        if (!user) {
-            throw new UnauthorizedException('Credenciales inválidas');
-        }
-
-        // Generar token
-        const token = this.generateToken(user);
-
-        return {
-            access_token: token,
-            token_type: 'Bearer',
-            expires_in: 3600,
-            user_id: user.id,
-        };
-    }
-
-    /**
-     * Validar credenciales de usuario
-     */
-    private async validateUser(email: string, password: string): Promise<any | null> {
-        const user = await this.usersService.findByEmail(email);
-
-        if (!user) {
-            return null;
-        }
-
-        // Validar password
-        const isPasswordValid = await this.usersService.validatePassword(password, user.password);
-
-        if (!isPasswordValid) {
-            return null;
-        }
-
-        // Retornar usuario sin el password
-        const { password: _, ...result } = user;
-        return result;
-    }
-
-    /**
-     * Generar token JWT
-     */
-    private generateToken(user: any): string {
-        // Payload del token JWT
-        const payload = {
-            sub: user.id, // Subject (ID del usuario)
-            email: user.email,
-            roles: user.roles || [], // Roles del usuario (opcional)
-        };
-
-        // Generar y retornar el token JWT
-        return this.jwtService.sign(payload);
     }
 }

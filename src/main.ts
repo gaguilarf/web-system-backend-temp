@@ -19,6 +19,7 @@ async function bootstrap() {
     .setDescription('API Documentation')
     .setVersion('1.0')
     .addTag('auth')
+    .addTag('roles')
     .addBearerAuth(
       {
         type: 'http',
